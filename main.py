@@ -1,6 +1,7 @@
 __author__ = 'caglar'
 import random
 
+
 class Cache(object):
     def __init__(self, size=32768, block_size=64, sets=2):
         self.size = size
@@ -8,6 +9,7 @@ class Cache(object):
         self.sets = sets
         self.cache = list()
         self.line = size/sets*block_size
+
         self.__build()
 
     def __build(self):
@@ -20,7 +22,7 @@ class Cache(object):
     def toquery(self,address):
         mask = (1<<32) - 1
         i=0
-        while(i<<)
+        while(i<<1)
         add_index = ((address << 20) & mask) >> 24
         add_data = address << 28 >> 28
         add_word = address << 30
@@ -61,10 +63,15 @@ class CacheLine(object):
     def __repr__(self):
         return repr(self.line)
 
+
+#Initialize the first view of the cache.
+#It will invoke build_line() for each line of the cache.
     def __build(self):
         for i in range(self.sets):
             self.line.append(self.__build_line())
 
+
+#Build a line with default variables.
     def __build_line(self):
         data = bytearray(self.size)
         return {"tag": 0, "valid": False, "dirty": False, "used": False, "data": data}
