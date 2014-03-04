@@ -7,40 +7,53 @@ class Cache(object):
         self.size = size
         self.block_size = block_size
         self.sets = sets
+        self.addr_size = 32
         self.cache = list()
         self.line = size/sets*block_size
-
+        self.block_addr_len = self.__calculate_addr_len(self.block_size)
+        self.line_addr_len = self.__calculate_addr_len(self.line)
+        self.tag_addr_len = self.addr_size - self.block_addr_len - self.line_addr_len
         self.__build()
-
-    def __build(self):
-        for i in range(line):
-            self.cache.append(CacheLine(i, self.block_size, self.sets))
 
     def __repr__(self):
         return str(self.cache.__len__())
 
+    def __getitem__(self, address):
+        return self.read_request(address)
+
+    def __build(self):
+        for i in range(self.line):
+            self.cache.append(CacheLine(i, self.block_size, self.sets))
+
+    def __calculate_addr_len(self,size):
+        i = 0
+        result = 1
+        while size >= result:
+            result <<= 1
+            i += 1
+        return i
+
     def toquery(self,address):
         mask = (1<<32) - 1
-        i=0
-        while(i<<1)
-        add_index = ((address << 20) & mask) >> 24
-        add_data = address << 28 >> 28
-        add_word = address << 30
-        add_tag = address >> 20
+        query = {"tag" : 0, "index" : 0, "block" : 0}
+        query["block"] = ((address << (self.addr_size - self.block_addr_len)) & mask) >> (self.addr_size - self.block_addr_len)
+        query["index"] = (address >> (self.block_addr_len)) << ((self.addr_size - self.line_addr_len) & mask) >> (self.addr_size - self.line_addr_len)
+        query["tag"] = address >> (self.addr_size - self.tag_addr_len)
+        return query
         
 
-    def read(self, address):
-        for i in range(self.sets):
-            if self.line[i].["tag"] is query["tag"] and self.line[i].['valid'] is True:
-                self.__read_hit(i, query)
-                return
-        self.__read_miss(query)
+    def read_request(self, address):
+        query = self.toquery(address)
+        for i in range(self.cache[query["index"]].sets):
+            if (self.cache[query["index"]].line[i]["tag"] is query["tag"]) and (self.line[i]['valid'] is True):
+                return self.__read_hit(i, query)
+        return self.__read_miss(query)
 
     def __read_miss(self, set, query):
         self.request_line(self)
 
-    def __read_hit(self, set, query):
-        return self.line[set]["data"]
+    def __read_hit(self, i, query):
+        return self.cache[query["index"]].line[i]["data"]
 
     def request_line(self, query):
         pass
@@ -49,10 +62,11 @@ class Cache(object):
 
 
 
+
+class CacheLine(object):
 #CacheLine is a Class for defining each cache blocks in cache hierarchy
 #During initialization it build a static block of given sets sized array with given block size as byte
 #It has only one method to fill remote block in.
-class CacheLine(object):
     def __init__(self, index, size, sets):
         self.size = size
         self.sets = sets
@@ -64,25 +78,22 @@ class CacheLine(object):
         return repr(self.line)
 
 
+    def __build(self):
 #Initialize the first view of the cache.
 #It will invoke build_line() for each line of the cache.
-    def __build(self):
         for i in range(self.sets):
             self.line.append(self.__build_line())
 
 
-#Build a line with default variables.
     def __build_line(self):
+#Build a line with default variables.
         data = bytearray(self.size)
         return {"tag": 0, "valid": False, "dirty": False, "used": False, "data": data}
 
-
+    def fill_line(self, rline):
 # It fills into the line the corresponding block from the upper layer.
 # Input "rline" is abbreviation of remote line formed as {tag, data}
 # As default, it uses Not recently used, random replacement Policy
-
-
-    def fill_line(self, rline):
         while True:
             i = random.randint(0, self.sets-1)
             if self.line[i]["used"] is False:
@@ -92,11 +103,3 @@ class CacheLine(object):
                 self.line[i]["used"] = True
                 self.line[i]["data"] = rline["data"]
                 return i
-
-
-
-
-
-
-a = CacheLine(63,2)
-a.fill_line({"tag": 1, "data": b"Xxxxcxxvzcf"})
