@@ -9,7 +9,7 @@ class Cache(object):
         self.sets = sets
         self.addr_size = 32
         self.cache = list()
-        self.line = size/sets*block_size
+        self.line = size / sets * block_size
         self.block_addr_len = self.__calculate_addr_len(self.block_size)
         self.line_addr_len = self.__calculate_addr_len(self.line)
         self.tag_addr_len = self.addr_size - self.block_addr_len - self.line_addr_len
@@ -21,11 +21,14 @@ class Cache(object):
     def __getitem__(self, address):
         return self.read_request(address)
 
+    def __setitem__(self, address, value):
+        self.write_request(address, value)
+
     def __build(self):
         for i in range(self.line):
             self.cache.append(CacheLine(i, self.block_size, self.sets))
 
-    def __calculate_addr_len(self,size):
+    def __calculate_addr_len(self, size):
         i = 0
         result = 1
         while size >= result:
@@ -33,73 +36,104 @@ class Cache(object):
             i += 1
         return i
 
-    def toquery(self,address):
-        mask = (1<<32) - 1
-        query = {"tag" : 0, "index" : 0, "block" : 0}
-        query["block"] = ((address << (self.addr_size - self.block_addr_len)) & mask) >> (self.addr_size - self.block_addr_len)
-        query["index"] = (address >> (self.block_addr_len)) << ((self.addr_size - self.line_addr_len) & mask) >> (self.addr_size - self.line_addr_len)
-        query["tag"] = address >> (self.addr_size - self.tag_addr_len)
+    def toquery(self, address):
+        mask = (1 << 32) - 1
+        query = {"tag": address >> (self.addr_size - self.tag_addr_len),
+                 "index": (address >> (self.block_addr_len)) << ((self.addr_size - self.line_addr_len) & mask) >> (
+                     self.addr_size - self.line_addr_len),
+                 "block": ((address << (self.addr_size - self.block_addr_len)) & mask) >> (
+                     self.addr_size - self.block_addr_len)}
         return query
-        
+
+    def isvalid(self, query):
+        for i in range(self.cache[query["index"]].sets):
+            if (self.cache[query["index"]].line[i]["tag"] is query["tag"]) and (
+                        self.cache[query["index"]].lines[i]['valid'] is True):
+                self.cache[query["index"]].used = i
+                return self.cache[query["index"]].lines[i]
+        return False
 
     def read_request(self, address):
         query = self.toquery(address)
-        for i in range(self.cache[query["index"]].sets):
-            if (self.cache[query["index"]].line[i]["tag"] is query["tag"]) and (self.line[i]['valid'] is True):
-                return self.__read_hit(i, query)
-        return self.__read_miss(query)
+        line = self.isvalid(query)
+        if line:
+            return self.__read_hit(line, query)
+        else:
+            return self.__read_miss(query)
+
+    def __read_hit(self, line, query):
+        return line["data"][query["block"]]
 
     def __read_miss(self, set, query):
         self.request_line(self)
 
-    def __read_hit(self, i, query):
-        return self.cache[query["index"]].line[i]["data"]
+    def write_request(self, address, value):
+        query = self.toquery(address)
+        line = self.isvalid(query)
+        if line is not -1:
+            return self.__write_hit(line, query, value)
+        else:
+            return self.__write_miss(query)
+
+    def __write_hit(self, line, query, value):
+        line["data"][query["block"]] = value
+        line["dirty"] = True
+
+    def __write_miss(self):
+        pass
 
     def request_line(self, query):
         pass
-#        rline = query["tag"],self.index
-#       self.fill_line(rline)
-
-
+        #rline = query["tag"],self.index
+        #self.fill_line(rline)
 
 
 class CacheLine(object):
-#CacheLine is a Class for defining each cache blocks in cache hierarchy
-#During initialization it build a static block of given sets sized array with given block size as byte
-#It has only one method to fill remote block in.
+    #CacheLine is a Class for defining each cache blocks in cache hierarchy
+    #During initialization it build a static block of given sets sized array with given block size as byte
+    #It has only one method to fill remote block in.
     def __init__(self, index, size, sets):
         self.size = size
         self.sets = sets
         self.index = index
-        self.line = list()
+        self.lines = list()
         self.__build()
+        self.used = 0
 
     def __repr__(self):
-        return repr(self.line)
-
+        return repr(self.lines)
 
     def __build(self):
-#Initialize the first view of the cache.
-#It will invoke build_line() for each line of the cache.
+        #Initialize the first view of the cache.
+        #It will invoke build_line() for each line of the cache.
         for i in range(self.sets):
-            self.line.append(self.__build_line())
-
+            self.lines.append(self.__build_line())
 
     def __build_line(self):
-#Build a line with default variables.
+        #Build a line with default variables.
+        #data is a byte array which is given length with size
         data = bytearray(self.size)
         return {"tag": 0, "valid": False, "dirty": False, "used": False, "data": data}
 
+    def mark_used(self, line):
+        self.used = line
+
+    def give_replaceable(self):
+        if self.sets == 1:
+            return 0
+        else:
+            line = random.randint(0, self.sets - 1)
+            if self.used != line:
+                return line
+            else:
+                return (line + 1) % self.sets
+
     def fill_line(self, rline):
-# It fills into the line the corresponding block from the upper layer.
-# Input "rline" is abbreviation of remote line formed as {tag, data}
-# As default, it uses Not recently used, random replacement Policy
-        while True:
-            i = random.randint(0, self.sets-1)
-            if self.line[i]["used"] is False:
-                self.line[i]["tag"] = rline["tag"]
-                self.line[i]["valid"] = True
-                self.line[i]["dirty"] = False
-                self.line[i]["used"] = True
-                self.line[i]["data"] = rline["data"]
-                return i
+        # It fills the corresponding block from the upper layer into the line .
+        # Input "rline" is abbreviation of remote line formed as {tag, data}
+        # As default, it uses Not recently used, random replacement Policy
+        i = self.give_replaceable()
+        self.lines[i]["tag"] = rline["tag"]
+        self.lines[i]["valid"] = True
+        self.lines[i]["dirty"] = False
+        self.lines[i]["data"] = rline["data"]
