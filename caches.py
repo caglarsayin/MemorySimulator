@@ -2,6 +2,20 @@ __author__ = 'caglar'
 import random
 
 
+class Memory(object):
+    def __init__(self):
+        self.memory = {}
+
+    def __getitem__(self, item):
+        try:
+            return self.memory[item]
+        except KeyError:
+            return 0
+
+    def __setitem__(self, key, value):
+        self.memory[key] = value
+
+
 class Cache(object):
     def __init__(self, size=32768, block_size=64, sets=2):
         self.size = size
@@ -13,6 +27,7 @@ class Cache(object):
         self.block_addr_len = self.__calculate_addr_len(self.block_size)
         self.line_addr_len = self.__calculate_addr_len(self.line)
         self.tag_addr_len = self.addr_size - self.block_addr_len - self.line_addr_len
+        self.super = None
         self.__build()
 
     def __repr__(self):
@@ -35,7 +50,7 @@ class Cache(object):
     def __calculate_addr_len(self, size):
         i = 0
         result = 1
-        while size >= result:
+        while size > result:
             result <<= 1
             i += 1
         return i
@@ -52,7 +67,7 @@ class Cache(object):
 
     def isvalid(self, query):
         for i in range(self.cache[query["index"]].sets):
-            if (self.cache[query["index"]].line[i]["tag"] is query["tag"]) and (self.cache[query["index"]].lines[i]['valid'] is True):
+            if (self.cache[query["index"]].lines[i]["tag"] is query["tag"]) and (self.cache[query["index"]].lines[i]['valid'] is True):
                 self.cache[query["index"]].used = i
                 return self.cache[query["index"]].lines[i]
         return False
@@ -68,8 +83,8 @@ class Cache(object):
         return line["data"][query["block"]]
 
     def __read_miss(self, query):
-        self.request_line(self, query) #proof it later.
-        self.read_request(self, query)
+        self.request_line(query) #proof it later.
+        return self.read_request(query)
 
 
     def write_request(self, address, value):
@@ -91,8 +106,8 @@ class Cache(object):
         line = query["address"] - query["block"]
         rline = {"tag": query["tag"], "data": bytearray(self.block_size)}
         for i in range(self.block_size):
-            rline["data"][i] = self.supper[line+i]
-        self.fill_line(rline)
+            rline["data"][i] = self.super[line+i]
+        self.cache[query["index"]].fill_line(rline)
 
 
 class CacheLine(object):
