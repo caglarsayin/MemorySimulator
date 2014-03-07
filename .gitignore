@@ -18,6 +18,7 @@ reated by http://www.gitignore.io
 *.ipr
 *.iws
 *.iml
+*.pyc
 
 ## Additional for IntelliJ
 out/
